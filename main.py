@@ -21,9 +21,9 @@ class NIIViewerApp:
         self.ax1.add_patch(self.rect1)
         self.ax1.axis("off")
         self.save_button = tk.Button(self.root, text="Guardar", command=self.save_nii)
-        self.save_button.pack()
-        self.segment_button = tk.Button(self.root, text="Segmentación", command=self.segment_dialog)
-        self.segment_button.pack()
+        # self.save_button.pack()
+        self.segment_button = tk.Button(self.root, text="Segmentación", command=self.segment_dialog, height=5)
+        self.segment_button.pack(fill=tk.X, expand=True)
         self.show_nii()
 
     def show_nii(self):
@@ -71,26 +71,70 @@ class NIIViewerApp:
         self.segment_dialog = tk.Toplevel(self.root)
         self.segment_dialog.title("Seleccione un método de segmentación")
 
-        threshold_button = tk.Button(self.segment_dialog, text="Umbral", command=self.segment_threshold)
-        threshold_button.pack()
+        frame = tk.Frame(self.segment_dialog)
+        frame.pack()
 
-        isodata_button = tk.Button(self.segment_dialog, text="Isodata", command=self.show_hello)
-        isodata_button.pack()
+        threshold_button = tk.Button(frame, text="Umbral", command=self.segment_threshold, width=15, height=2)
+        threshold_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
-        region_growing_button = tk.Button(self.segment_dialog, text="Crecimiento de Regiones", command=self.segment_region_growing)
-        region_growing_button.pack()
+        isodata_button = tk.Button(frame, text="Isodata", command=self.segment_isodata, width=15, height=2)
+        isodata_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
-        kmeans_button = tk.Button(self.segment_dialog, text="K-Means", command=self.segment_kmeans)
-        kmeans_button.pack()
+        region_growing_button = tk.Button(frame, text="Crecimiento de Regiones", command=self.segment_region_growing, width=20, height=2)
+        region_growing_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
-    def show_hello(self):
-        messagebox.showinfo("Hola", "¡Hola!")
+        kmeans_button = tk.Button(frame, text="K-Means", command=self.segment_kmeans, width=15, height=2)
+        kmeans_button.pack(side=tk.LEFT, padx=5,pady= 10)
+
+
+    def show_isodata_segmentation(self):
+        isodata_data = self.apply_isodata_segmentation()
+        self.ax2.imshow(isodata_data, cmap="gray")
+        
+        # Agregar subplot para el histograma
+        self.fig2, (self.ax_hist, self.ax2) = plt.subplots(2, 1)
+        hist, bins = np.histogram(self.slice_data1.flatten(), bins=256, range=(0,256))
+        self.ax_hist.bar(bins[:-1], hist, width=1)
+        
+        self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.threshold_dialog)
+        self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        self.ax2.axis("off")
+        self.canvas2.draw_idle()
+
+    def apply_isodata_segmentation(self):
+        # Calcular el histograma de la imagen
+        hist, bins = np.histogram(self.slice_data1.flatten(), bins=256, range=(0,256))
+
+        # Calcular el umbral inicial
+        threshold = 128
+
+        # Iterar hasta que el umbral converja
+        while True:
+            # Calcular las medias de las dos clases
+            mean1 = np.mean(self.slice_data1[self.slice_data1 <= threshold])
+            mean2 = np.mean(self.slice_data1[self.slice_data1 > threshold])
+
+            # Calcular el nuevo umbral como el promedio de las dos medias
+            new_threshold = (mean1 + mean2) / 2
+
+            # Si el nuevo umbral es igual al umbral anterior, detener la iteración
+            if new_threshold == threshold:
+                break
+
+            # Actualizar el umbral
+            threshold = new_threshold
+
+        # Aplicar el umbral a la imagen
+        segmented_data = np.where(self.slice_data1 > threshold, 255, 0)
+
+        return segmented_data
+
 
     def segment_threshold(self):
         self.threshold_dialog = tk.Toplevel(self.root)
         self.threshold_dialog.title("Segmentación por Umbral")
 
-        self.threshold_slider = ttk.Scale(self.threshold_dialog, from_=0, to=255, orient="horizontal", command=self.update_threshold)
+        self.threshold_slider = ttk.Scale(self.threshold_dialog, from_=0, to=255, orient="horizontal", command=self.update_threshold, value=255)
         self.threshold_slider.pack()
 
         self.canvas2 = tk.Canvas(self.threshold_dialog)
@@ -111,7 +155,18 @@ class NIIViewerApp:
         self.canvas2.draw_idle()
 
     def segment_isodata(self):
-        messagebox.showinfo("Segmentación", "Método de Segmentación: Isodata")
+        self.threshold_dialog = tk.Toplevel(self.root)
+        self.threshold_dialog.title("Segmentación Isodata")
+
+        self.canvas2 = tk.Canvas(self.threshold_dialog)
+        self.fig2, self.ax2 = plt.subplots()
+        self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.threshold_dialog)
+        self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        self.rect2 = Rectangle((0, 0), 1, 1, fill=None, edgecolor='gray')
+        self.ax2.add_patch(self.rect2)
+        self.ax2.axis("off")
+
+        self.show_isodata_segmentation()
 
     def segment_region_growing(self):
         messagebox.showinfo("Segmentación", "Método de Segmentación: Crecimiento de Regiones")
