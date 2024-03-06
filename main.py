@@ -6,6 +6,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.patches import Rectangle
 import nibabel as nib
 from tkinter import ttk
+import os
 
 class NIIViewerApp:
     def __init__(self, root):
@@ -27,12 +28,23 @@ class NIIViewerApp:
         self.show_nii()
 
     def show_nii(self):
-        file_path = filedialog.askopenfilename(filetypes=[("NII files", "*.nii")])
+        default_file = "sub-01_T1w.nii"
+        if os.path.exists(default_file):
+            file_path = default_file
+        else:
+            file_path = filedialog.askopenfilename(filetypes=[("NII files", "*.nii")])
+        
         if file_path:
             self.img = nib.load(file_path)
             self.data = self.img.get_fdata()
             self.update_plot1()
             self.cid_press1 = self.canvas1.mpl_connect('button_press_event', self.on_click1)
+        # file_path = filedialog.askopenfilename(filetypes=[("NII files", "*.nii")])
+        # if file_path:
+        #     self.img = nib.load(file_path)
+        #     self.data = self.img.get_fdata()
+        #     self.update_plot1()
+        #     self.cid_press1 = self.canvas1.mpl_connect('button_press_event', self.on_click1)
 
     def update_plot1(self):
         self.slice_num1 = self.data.shape[-1] // 2
@@ -106,7 +118,7 @@ class NIIViewerApp:
         hist, bins = np.histogram(self.slice_data1.flatten(), bins=256, range=(0,256))
 
         # Calcular el umbral inicial
-        threshold = 128
+        threshold = 257
 
         # Iterar hasta que el umbral converja
         while True:
@@ -169,7 +181,68 @@ class NIIViewerApp:
         self.show_isodata_segmentation()
 
     def segment_region_growing(self):
-        messagebox.showinfo("Segmentación", "Método de Segmentación: Crecimiento de Regiones")
+        messagebox.showinfo("Segmentación", "Seleccione una semilla haciendo clic en la imagen.")
+
+        # Desconectar cualquier conexión de clic anterior
+        self.canvas1.mpl_disconnect(self.cid_press1)
+        self.cid_press1 = self.canvas1.mpl_connect('button_press_event', self.on_click_region_growing)
+
+    def on_click_region_growing(self, event):
+        x, y = int(event.xdata), int(event.ydata)
+        self.seed_point = (x, y)
+        self.region_growing_segmentation()
+
+    def region_growing_segmentation(self):
+        if not hasattr(self, 'seed_point'):
+            messagebox.showerror("Error", "Primero seleccione una semilla haciendo clic en la imagen.")
+            return
+
+        seed_x, seed_y = self.seed_point
+        seed_value = self.slice_data1[seed_y, seed_x]  # Obtener el valor de intensidad de la semilla
+
+        # Inicializar la matriz de etiquetas para marcar los píxeles visitados
+        labels = np.zeros_like(self.slice_data1)
+
+        # Inicializar una lista de píxeles por visitar
+        queue = [(seed_x, seed_y)]
+
+        # Definir la tolerancia de intensidad para el crecimiento de regiones
+        intensity_threshold = 100  # Puedes ajustar este valor según tus necesidades
+
+        # Mientras haya píxeles por visitar en la cola
+        while queue:
+            x, y = queue.pop(0)
+            # Marcar el píxel como visitado
+            labels[y, x] = 1
+
+            # Comprobar los píxeles adyacentes
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    # Verificar si el píxel está dentro de la imagen
+                    if 0 <= x + dx < self.slice_data1.shape[1] and 0 <= y + dy < self.slice_data1.shape[0]:
+                        # Verificar si el píxel no ha sido visitado y si cumple el criterio de similitud
+                        if labels[y + dy, x + dx] == 0 and abs(self.slice_data1[y + dy, x + dx] - seed_value) < intensity_threshold:
+                            # Agregar el píxel a la cola para visitar en el próximo paso
+                            queue.append((x + dx, y + dy))
+                            # Marcar el píxel como parte de la región segmentada
+                            labels[y + dy, x + dx] = 1
+
+        # Visualizar la región segmentada
+        self.threshold_dialog = tk.Toplevel(self.root)  # Crear el diálogo de segmentación si no existe
+        self.threshold_dialog.title("Segmentación por Crecimiento de Regiones")
+
+        self.canvas2 = tk.Canvas(self.threshold_dialog)
+        self.fig2, self.ax2 = plt.subplots()
+        self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.threshold_dialog)
+        self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        self.ax2.imshow(labels, cmap="gray")  # Utilizar 'labels' para mostrar la segmentación
+        self.ax2.axis("off")
+        self.canvas2.draw_idle()
+
+
+
+    # def segment_region_growing(self):
+    #     messagebox.showinfo("Segmentación", "Método de Segmentación: Crecimiento de Regiones")
 
     def segment_kmeans(self):
         messagebox.showinfo("Segmentación", "Método de Segmentación: K-Means")
