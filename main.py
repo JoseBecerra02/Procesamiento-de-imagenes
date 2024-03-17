@@ -1,260 +1,174 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
-import numpy as np
+from tkinter import filedialog
+import nibabel as nib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.patches import Rectangle
-import nibabel as nib
-from tkinter import ttk
+import numpy as np
+from skimage.filters import threshold_otsu
+from sklearn.cluster import KMeans
 import os
 
-class NIIViewerApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Proyecto")
-
-        # Ventana 1: Mostrar archivo cargado y botones
-        self.canvas1 = tk.Canvas(root)
-        self.fig1, self.ax1 = plt.subplots()
-        self.canvas1 = FigureCanvasTkAgg(self.fig1, master=self.root)
-        self.canvas1.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.rect1 = Rectangle((0, 0), 1, 1, fill=None, edgecolor='gray')
-        self.ax1.add_patch(self.rect1)
-        self.ax1.axis("off")
-        self.save_button = tk.Button(self.root, text="Guardar", command=self.save_nii)
-        # self.save_button.pack()
-        self.segment_button = tk.Button(self.root, text="Segmentación", command=self.segment_dialog, height=5)
-        self.segment_button.pack(fill=tk.X, expand=True)
-        self.show_nii()
-
-    def show_nii(self):
-        default_file = "sub-01_T1w.nii"
-        if os.path.exists(default_file):
-            file_path = default_file
-        else:
-            file_path = filedialog.askopenfilename(filetypes=[("NII files", "*.nii")])
+class NiiViewerApp:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("Segmentaciones")
         
-        if file_path:
-            self.img = nib.load(file_path)
-            self.data = self.img.get_fdata()
-            self.update_plot1()
-            self.cid_press1 = self.canvas1.mpl_connect('button_press_event', self.on_click1)
-        # file_path = filedialog.askopenfilename(filetypes=[("NII files", "*.nii")])
-        # if file_path:
-        #     self.img = nib.load(file_path)
-        #     self.data = self.img.get_fdata()
-        #     self.update_plot1()
-        #     self.cid_press1 = self.canvas1.mpl_connect('button_press_event', self.on_click1)
+        self.frame = tk.Frame(self.master)
+        self.frame.pack()
 
-    def update_plot1(self):
-        self.slice_num1 = self.data.shape[-1] // 2
-        self.slice_data1 = np.rot90(self.data[:, :, self.slice_num1])
-        self.ax1.imshow(self.slice_data1, cmap="gray")
-        self.canvas1.draw_idle()
+        # self.file_path = filedialog.askopenfilename(filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")])
+        self.file_path = "file.nii"
+        self.img = nib.load(self.file_path)
+        self.img_data = self.img.get_fdata()    
 
-    def on_click1(self, event):
-        x, y = int(event.xdata), int(event.ydata)
-        self.rect1.set_xy((x - 10, y - 10))
-        self.rect1.set_width(20)
-        self.rect1.set_height(20)
-        self.fig1.canvas.draw()
-        self.canvas1.mpl_disconnect(self.cid_press1) # Desconectar la conexión anterior
-        self.cid_move1 = self.canvas1.mpl_connect('motion_notify_event', self.on_motion1)
-        self.cid_release1 = self.canvas1.mpl_connect('button_release_event', self.on_release1)
+        self.original_folder = os.path.dirname(self.file_path)    
 
-        self.xs1 = [x]
-        self.ys1 = [y]
+        self.update_delay = 100  # Milisegundos
+        self.update_slice_id = None
 
-    def on_motion1(self, event):
-        if event.inaxes and event.button == 1:
-            x, y = int(event.xdata), int(event.ydata)
-            self.xs1.append(x)
-            self.ys1.append(y)
-            self.ax1.plot(self.xs1[-2:], self.ys1[-2:], color='red')
-            self.canvas1.draw()
+        self.z_slider = tk.Scale(self.frame, from_=0, to=1, orient=tk.HORIZONTAL, resolution=1, command=self.update_slice)
+        self.z_slider.pack()
+        self.z_slider.config(to=self.img_data.shape[2] - 1)
+        self.z_slider.set(self.img_data.shape[2] // 2)
 
-    def on_release1(self, event):
-        if event.button == 1:
-            self.canvas1.mpl_disconnect(self.cid_move1)
-            self.canvas1.mpl_disconnect(self.cid_release1)
-            self.cid_press1 = self.canvas1.mpl_connect('button_press_event', self.on_click1)
+        self.z_slider.bind("<MouseWheel>", self.mouse_wheel)
 
-    def segment_dialog(self):
-        self.segment_dialog = tk.Toplevel(self.root)
-        self.segment_dialog.title("Seleccione un método de segmentación")
+        self.canvas = None
 
-        frame = tk.Frame(self.segment_dialog)
+
+        self.segment_button = tk.Button(self.frame, text="Segmentación", command=self.segmentation_options)
+        self.segment_button.pack()
+
+    def update_slice(self, event=None):
+        if self.update_slice_id:
+            self.master.after_cancel(self.update_slice_id)
+        self.update_slice_id = self.master.after(self.update_delay, self._update_slice)
+
+    def _update_slice(self):
+        if self.img_data is not None:
+            self.z_slice = int(self.z_slider.get())
+            plt.clf()
+            plt.imshow(self.img_data[:, :, self.z_slice], cmap='gray')
+            plt.title("Corte en Z = {}".format(self.z_slice))
+            plt.axis('off')
+            plt.tight_layout()
+
+            if self.canvas:
+                self.canvas.get_tk_widget().destroy()
+
+            self.canvas = FigureCanvasTkAgg(plt.gcf(), master=self.frame)
+            self.canvas.draw()
+            self.canvas.get_tk_widget().pack()
+
+
+
+    def mouse_wheel(self, event):
+        if event.delta > 0:
+            self.z_slider.set(self.z_slider.get() + 1)
+        else:
+            self.z_slider.set(self.z_slider.get() - 1)
+
+    def segmentation_options(self):
+        dialog = tk.Toplevel(self.master)
+        dialog.title("Opciones de Segmentación")
+
+        frame = tk.Frame(dialog)
         frame.pack()
 
-        threshold_button = tk.Button(frame, text="Umbral", command=self.segment_threshold, width=15, height=2)
+        threshold_button = tk.Button(frame, text="Umbral", command=self.threshold_segmentation, width=15, height=2)
         threshold_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
-        isodata_button = tk.Button(frame, text="Isodata", command=self.segment_isodata, width=15, height=2)
+        isodata_button = tk.Button(frame, text="Isodata", command=self.isodata_segmentation, width=15, height=2)
         isodata_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
-        region_growing_button = tk.Button(frame, text="Crecimiento de Regiones", command=self.segment_region_growing, width=20, height=2)
+        region_growing_button = tk.Button(frame, text="Crecimiento de Regiones", command=self.region_growth_segmentation, width=20, height=2)
         region_growing_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
-        kmeans_button = tk.Button(frame, text="K-Means", command=self.segment_kmeans, width=15, height=2)
+        kmeans_button = tk.Button(frame, text="K-Means", command=self.kmeans_segmentation, width=15, height=2)
         kmeans_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
+    def threshold_segmentation(self):
 
-    def show_isodata_segmentation(self):
-        isodata_data = self.apply_isodata_segmentation()
-        self.ax2.imshow(isodata_data, cmap="gray")
+        # min_pixel_value = np.min(self.img_data[:, :, self.z_slice])
+        # print(min_pixel_value)
+        max_pixel_value = np.max(self.img_data[:, :, self.z_slice])
+        # print(max_pixel_value)
         
-        # Agregar subplot para el histograma
-        self.fig2, (self.ax_hist, self.ax2) = plt.subplots(2, 1)
-        hist, bins = np.histogram(self.slice_data1.flatten(), bins=256, range=(0,256))
-        self.ax_hist.bar(bins[:-1], hist, width=1)
+
         
-        self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.threshold_dialog)
-        self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.ax2.axis("off")
-        self.canvas2.draw_idle()
+        # Calcular el umbral inicial usando el método de Otsu
+        threshold_value = threshold_otsu(self.img_data[:, :, self.z_slice])
+        print(threshold_value)
+        # Crear una nueva ventana para la segmentación
+        threshold_window = tk.Toplevel(self.master)
+        threshold_window.title("Segmentación por Umbralización")
 
-    def apply_isodata_segmentation(self):
-        # Calcular el histograma de la imagen
-        hist, bins = np.histogram(self.slice_data1.flatten(), bins=256, range=(0,256))
+        # Crear un marco para contener el título y el control deslizante
+        frame = tk.Frame(threshold_window)
+        frame.pack()
 
-        # Calcular el umbral inicial
-        threshold = 257
+        # Crear el título para mostrar el valor del umbral
+        threshold_label = tk.Label(frame, text="Segmentación con umbral {}".format(threshold_value), font=("Helvetica", 14))
+        threshold_label.pack(side=tk.TOP)
 
-        # Iterar hasta que el umbral converja
-        while True:
-            # Calcular las medias de las dos clases
-            mean1 = np.mean(self.slice_data1[self.slice_data1 <= threshold])
-            mean2 = np.mean(self.slice_data1[self.slice_data1 > threshold])
+        # Función para actualizar la segmentación según el valor del slider
+        def update_segmentation(value):
+            threshold_value = int(value)
+            segmented_img = self.img_data[:, :, self.z_slice] > threshold_value
+            im.set_data(segmented_img)  # Actualizar solo los datos de la imagen
+            threshold_label.config(text="Segmentación con umbral {}".format(threshold_value))
+            fig.canvas.draw()
 
-            # Calcular el nuevo umbral como el promedio de las dos medias
-            new_threshold = (mean1 + mean2) / 2
+        # Crear un subplot para mostrar la imagen segmentada
+        fig, ax = plt.subplots()
+        ax.axis('off')
+        fig.tight_layout()
+        fig_canvas = FigureCanvasTkAgg(fig, master=frame)
+        fig_canvas.draw()
+        fig_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
-            # Si el nuevo umbral es igual al umbral anterior, detener la iteración
-            if new_threshold == threshold:
-                break
-
-            # Actualizar el umbral
-            threshold = new_threshold
-
-        # Aplicar el umbral a la imagen
-        segmented_data = np.where(self.slice_data1 > threshold, 255, 0)
-
-        return segmented_data
-
-
-    def segment_threshold(self):
-        self.threshold_dialog = tk.Toplevel(self.root)
-        self.threshold_dialog.title("Segmentación por Umbral")
-
-        self.threshold_slider = ttk.Scale(self.threshold_dialog, from_=0, to=255, orient="horizontal", command=self.update_threshold, value=255)
-        self.threshold_slider.pack()
-
-        self.canvas2 = tk.Canvas(self.threshold_dialog)
-        self.fig2, self.ax2 = plt.subplots()
-        self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.threshold_dialog)
-        self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.rect2 = Rectangle((0, 0), 1, 1, fill=None, edgecolor='gray')
-        self.ax2.add_patch(self.rect2)
-        self.ax2.axis("off")
-
-        self.update_threshold(self.threshold_slider.get())
-
-    def update_threshold(self, value):
-        threshold_value = int(float(value))
-        self.threshold_value = threshold_value
-        thresholded_data = np.where(self.slice_data1 > self.threshold_value, 255, 0)
-        self.ax2.imshow(thresholded_data, cmap="gray")
-        self.canvas2.draw_idle()
-
-    def segment_isodata(self):
-        self.threshold_dialog = tk.Toplevel(self.root)
-        self.threshold_dialog.title("Segmentación Isodata")
-
-        self.canvas2 = tk.Canvas(self.threshold_dialog)
-        self.fig2, self.ax2 = plt.subplots()
-        self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.threshold_dialog)
-        self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.rect2 = Rectangle((0, 0), 1, 1, fill=None, edgecolor='gray')
-        self.ax2.add_patch(self.rect2)
-        self.ax2.axis("off")
-
-        self.show_isodata_segmentation()
-
-    def segment_region_growing(self):
-        messagebox.showinfo("Segmentación", "Seleccione una semilla haciendo clic en la imagen.")
-
-        # Desconectar cualquier conexión de clic anterior
-        self.canvas1.mpl_disconnect(self.cid_press1)
-        self.cid_press1 = self.canvas1.mpl_connect('button_press_event', self.on_click_region_growing)
-
-    def on_click_region_growing(self, event):
-        x, y = int(event.xdata), int(event.ydata)
-        self.seed_point = (x, y)
-        self.region_growing_segmentation()
-
-    def region_growing_segmentation(self):
-        if not hasattr(self, 'seed_point'):
-            messagebox.showerror("Error", "Primero seleccione una semilla haciendo clic en la imagen.")
-            return
-
-        seed_x, seed_y = self.seed_point
-        seed_value = self.slice_data1[seed_y, seed_x]  # Obtener el valor de intensidad de la semilla
-
-        # Inicializar la matriz de etiquetas para marcar los píxeles visitados
-        labels = np.zeros_like(self.slice_data1)
-
-        # Inicializar una lista de píxeles por visitar
-        queue = [(seed_x, seed_y)]
-
-        # Definir la tolerancia de intensidad para el crecimiento de regiones
-        intensity_threshold = 100  # Puedes ajustar este valor según tus necesidades
-
-        # Mientras haya píxeles por visitar en la cola
-        while queue:
-            x, y = queue.pop(0)
-            # Marcar el píxel como visitado
-            labels[y, x] = 1
-
-            # Comprobar los píxeles adyacentes
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    # Verificar si el píxel está dentro de la imagen
-                    if 0 <= x + dx < self.slice_data1.shape[1] and 0 <= y + dy < self.slice_data1.shape[0]:
-                        # Verificar si el píxel no ha sido visitado y si cumple el criterio de similitud
-                        if labels[y + dy, x + dx] == 0 and abs(self.slice_data1[y + dy, x + dx] - seed_value) < intensity_threshold:
-                            # Agregar el píxel a la cola para visitar en el próximo paso
-                            queue.append((x + dx, y + dy))
-                            # Marcar el píxel como parte de la región segmentada
-                            labels[y + dy, x + dx] = 1
-
-        # Visualizar la región segmentada
-        self.threshold_dialog = tk.Toplevel(self.root)  # Crear el diálogo de segmentación si no existe
-        self.threshold_dialog.title("Segmentación por Crecimiento de Regiones")
-
-        self.canvas2 = tk.Canvas(self.threshold_dialog)
-        self.fig2, self.ax2 = plt.subplots()
-        self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.threshold_dialog)
-        self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.ax2.imshow(labels, cmap="gray")  # Utilizar 'labels' para mostrar la segmentación
-        self.ax2.axis("off")
-        self.canvas2.draw_idle()
+        # Plotear la imagen segmentada inicialmente
+        segmented_img = self.img_data[:, :, self.z_slice] > threshold_value
+        im = ax.imshow(segmented_img, cmap='gray')
+        # Slider para ajustar el umbral
+        self.threshold_slider = tk.Scale(frame, from_=0, to=max_pixel_value, orient=tk.HORIZONTAL, length=200, command=update_segmentation)
+        self.threshold_slider.set(threshold_value)
+        self.threshold_slider.pack(side=tk.TOP)
 
 
+        
+        spacer = tk.Frame(frame, height=10)
+        spacer.pack()
+        
+        save_button = tk.Button(frame, text="Guardar como PNG", command=lambda: self.save_as_png(segmented_img), width=15, height=2)
+        save_button.pack(side=tk.BOTTOM)
 
-    # def segment_region_growing(self):
-    #     messagebox.showinfo("Segmentación", "Método de Segmentación: Crecimiento de Regiones")
+        # Visualizar la imagen segmentada inicialmente
+        update_segmentation(threshold_value)
+    def save_as_png(self, segmented_img):
+        
+        # Construir la ruta completa del archivo PNG usando la ruta de la carpeta original y el nombre del archivo original
+        png_file_path = os.path.join(self.original_folder, "Segmentacion_umbral.png")
+        
+        # Guardar la imagen segmentada como un archivo PNG
+        plt.imsave(png_file_path, segmented_img, cmap='gray')
+        print("Imagen guardada como:", png_file_path)
 
-    def segment_kmeans(self):
-        messagebox.showinfo("Segmentación", "Método de Segmentación: K-Means")
+        
 
-    def save_nii(self):
-        file_path = filedialog.asksaveasfilename(defaultextension=".nii", filetypes=[("NII files", "*.nii")])
-        if file_path:
-            self.data[:, :, self.slice_num1] = np.rot90(self.slice_data1)
-            new_img = nib.Nifti1Image(self.data, self.img.affine)
-            nib.save(new_img, file_path)
+    def isodata_segmentation(self):
+        pass  # Implementa la segmentación de Isodata
+
+    def region_growth_segmentation(self):
+        pass  # Implementa la segmentación de crecimiento de regiones
+
+    def kmeans_segmentation(self):
+        pass  # Implementa la segmentación de kmeans
+
+def main():
+    root = tk.Tk()
+    app = NiiViewerApp(root)
+    root.mainloop()
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = NIIViewerApp(root)
-    root.mainloop()
+    main()
