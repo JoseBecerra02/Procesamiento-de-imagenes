@@ -74,31 +74,39 @@ class NiiViewerApp:
 
         frame = tk.Frame(dialog)
         frame.pack()
+        def destU ():
+            dialog.destroy()
+            self.threshold_segmentation()
+        def destI ():
+            dialog.destroy()
+            self.isodata_segmentation()
+        def destC ():
+            dialog.destroy()
+            self.region_growth_segmentation()
+        def destK ():
+            dialog.destroy()
+            self.kmeans_segmentation()
+            
 
-        threshold_button = tk.Button(frame, text="Umbral", command=self.threshold_segmentation, width=15, height=2)
+        threshold_button = tk.Button(frame, text="Umbral", command=destU, width=15, height=2)
         threshold_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
-        isodata_button = tk.Button(frame, text="Isodata", command=self.isodata_segmentation, width=15, height=2)
+        isodata_button = tk.Button(frame, text="Isodata", command=destI, width=15, height=2)
         isodata_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
-        region_growing_button = tk.Button(frame, text="Crecimiento de Regiones", command=self.region_growth_segmentation, width=20, height=2)
+        region_growing_button = tk.Button(frame, text="Crecimiento de Regiones", command=destC, width=20, height=2)
         region_growing_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
-        kmeans_button = tk.Button(frame, text="K-Means", command=self.kmeans_segmentation, width=15, height=2)
+        kmeans_button = tk.Button(frame, text="K-Means", command=destK, width=15, height=2)
         kmeans_button.pack(side=tk.LEFT, padx=5,pady= 10)
 
+
     def threshold_segmentation(self):
-
         # min_pixel_value = np.min(self.img_data[:, :, self.z_slice])
-        # print(min_pixel_value)
         max_pixel_value = np.max(self.img_data[:, :, self.z_slice])
-        # print(max_pixel_value)
-        
-
         
         # Calcular el umbral inicial usando el método de Otsu
         threshold_value = threshold_otsu(self.img_data[:, :, self.z_slice])
-        print(threshold_value)
         # Crear una nueva ventana para la segmentación
         threshold_window = tk.Toplevel(self.master)
         threshold_window.title("Segmentación por Umbralización")
@@ -135,11 +143,6 @@ class NiiViewerApp:
         self.threshold_slider.set(threshold_value)
         self.threshold_slider.pack(side=tk.TOP)
 
-
-        
-        spacer = tk.Frame(frame, height=10)
-        spacer.pack()
-        
         save_button = tk.Button(frame, text="Guardar como PNG", command=lambda: self.save_as_png(segmented_img), width=15, height=2)
         save_button.pack(side=tk.BOTTOM)
 
