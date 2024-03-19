@@ -72,35 +72,40 @@ class NiiViewerApp:
 
         frame = tk.Frame(dialog)
         frame.pack()
-        def destU ():
+
+        def destU():
             dialog.destroy()
             self.threshold_segmentation()
-        def destI ():
+
+        def destI():
             dialog.destroy()
             self.isodata_segmentation()
-        def destC ():
+
+        def destC():
             dialog.destroy()
-            self.cid_press1 = self.canvas.mpl_connect('button_press_event', self.on_click_region_growing)
-            self.region_growth_segmentation()
-        def destK ():
+            num_seeds_dialog = tk.Toplevel(self.master)
+            num_seeds_dialog.title("Número de Semillas")
+            tk.Label(num_seeds_dialog, text="Ingrese el número de semillas que desea seleccionar:").pack()
+            num_seeds_entry = tk.Entry(num_seeds_dialog)
+            num_seeds_entry.pack()
+            tk.Button(num_seeds_dialog, text="Aceptar", command=lambda: self.region_growth_segmentation(int(num_seeds_entry.get()))).pack()
+
+        def destK():
             dialog.destroy()
             self.kmeans_segmentation()
-            
 
         threshold_button = tk.Button(frame, text="Umbral", command=destU, width=15, height=2)
-        threshold_button.pack(side=tk.LEFT, padx=5,pady= 10)
+        threshold_button.pack(side=tk.LEFT, padx=5, pady=10)
 
         isodata_button = tk.Button(frame, text="Isodata", command=destI, width=15, height=2)
-        isodata_button.pack(side=tk.LEFT, padx=5,pady= 10)
+        isodata_button.pack(side=tk.LEFT, padx=5, pady=10)
 
         region_growing_button = tk.Button(frame, text="Crecimiento de Regiones", command=destC, width=20, height=2)
-        region_growing_button.pack(side=tk.LEFT, padx=5,pady= 10)
+        region_growing_button.pack(side=tk.LEFT, padx=5, pady=10)
 
         kmeans_button = tk.Button(frame, text="K-Means", command=destK, width=15, height=2)
-        kmeans_button.pack(side=tk.LEFT, padx=5,pady= 10)
-
-
-
+        kmeans_button.pack(side=tk.LEFT, padx=5, pady=10)
+    
     def threshold_segmentation(self):
         # min_pixel_value = np.min(self.img_data[:, :, self.z_slice])
         max_pixel_value = np.max(self.img_data[:, :, self.z_slice])
@@ -157,8 +162,6 @@ class NiiViewerApp:
         plt.imsave(png_file_path, segmented_img, cmap='gray')
         print("Imagen guardada como:", png_file_path)
 
-        
-
     def isodata_segmentation(self):
         # Calcular el histograma de la imagen
         histogram, bins = np.histogram(self.img_data[:, :, self.z_slice].ravel(), bins=256, range=(0, 256))
@@ -207,65 +210,61 @@ class NiiViewerApp:
         axes[1].set_ylabel("Frecuencia")
         plt.show()
 
-    def region_growth_segmentation(self):
-        messagebox.showinfo("Segmentación", "Método de Segmentación: Crecimiento de Regiones")
-        messagebox.showinfo("Segmentación", "Seleccione una semilla haciendo clic en la imagen.")
+
+    def region_growth_segmentation(self, num_seeds):
+        messagebox.showinfo("Segmentación", f"Seleccione {num_seeds} semillas haciendo clic en la imagen.")
 
         # Desconectar cualquier conexión de clic anterior
         self.canvas.mpl_disconnect(self.cid_press1)
-        self.cid_press1 = self.canvas.mpl_connect('button_press_event', self.on_click_region_growing)
+        self.cid_press1 = self.canvas.mpl_connect('button_press_event', lambda event: self.on_click_region_growing(event, num_seeds))
 
-    def on_click_region_growing(self, event):
+
+    def on_click_region_growing(self, event, num_seeds):
+        if not hasattr(self, 'seed_points'):
+            self.seed_points = []
         x, y = int(event.xdata), int(event.ydata)
-        self.seed_point = (x, y)
-        self.region_growing_segmentation()
+        self.seed_points.append((x, y))
+        if len(self.seed_points) == num_seeds:
+            self.region_growing_segmentation(num_seeds)
 
-    def region_growing_segmentation(self):
-        if not hasattr(self, 'seed_point'):
-            messagebox.showerror("Error", "Primero seleccione una semilla haciendo clic en la imagen.")
+
+    def region_growing_segmentation(self, num_seeds):
+        if not hasattr(self, 'seed_points') or len(self.seed_points) != num_seeds:
+            messagebox.showerror("Error", f"Debe seleccionar exactamente {num_seeds} semillas haciendo clic en la imagen.")
             return
 
-        seed_x, seed_y = self.seed_point
-        seed_value = self.img_data[seed_y, seed_x, self.z_slice]  # Obtener el valor de intensidad de la semilla
-
-        # Inicializar la matriz de etiquetas para marcar los píxeles visitados
         labels = np.zeros_like(self.img_data[:, :, self.z_slice])
 
-        # Inicializar una lista de píxeles por visitar
-        queue = [(seed_x, seed_y)]
+        intensity_threshold = 100
 
-        # Definir la tolerancia de intensidad para el crecimiento de regiones
-        intensity_threshold = 100  # Puedes ajustar este valor según tus necesidades
+        for seed_point in self.seed_points:
+            seed_x, seed_y = seed_point
+            seed_value = self.img_data[seed_y, seed_x, self.z_slice]
 
-        # Mientras haya píxeles por visitar en la cola
-        while queue:
-            x, y = queue.pop(0)
-            # Marcar el píxel como visitado
-            labels[y, x] = 1
+            queue = [seed_point]
 
-            # Comprobar los píxeles adyacentes
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    # Verificar si el píxel está dentro de la imagen
-                    if 0 <= x + dx < self.img_data.shape[1] and 0 <= y + dy < self.img_data.shape[0]:
-                        # Verificar si el píxel no ha sido visitado y si cumple el criterio de similitud
-                        if labels[y + dy, x + dx] == 0 and abs(self.img_data[y + dy, x + dx, self.z_slice] - seed_value) < intensity_threshold:
-                            # Agregar el píxel a la cola para visitar en el próximo paso
-                            queue.append((x + dx, y + dy))
-                            # Marcar el píxel como parte de la región segmentada
-                            labels[y + dy, x + dx] = 1
+            while queue:
+                x, y = queue.pop(0)
+                labels[y, x] = 1
 
-        # Visualizar la región segmentada
-        self.threshold_dialog = tk.Toplevel(self.master)  # Crear el diálogo de segmentación si no existe
+                for dx in [-1, 0, 1]:
+                    for dy in [-1, 0, 1]:
+                        if 0 <= x + dx < self.img_data.shape[1] and 0 <= y + dy < self.img_data.shape[0]:
+                            if labels[y + dy, x + dx] == 0 and abs(self.img_data[y + dy, x + dx, self.z_slice] - seed_value) < intensity_threshold:
+                                queue.append((x + dx, y + dy))
+                                labels[y + dy, x + dx] = 1
+
+        self.threshold_dialog = tk.Toplevel(self.master)
         self.threshold_dialog.title("Segmentación por Crecimiento de Regiones")
 
         self.canvas2 = tk.Canvas(self.threshold_dialog)
         self.fig2, self.ax2 = plt.subplots()
         self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.threshold_dialog)
         self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.ax2.imshow(labels, cmap="gray")  # Utilizar 'labels' para mostrar la segmentación
+        self.ax2.imshow(labels, cmap="gray")
         self.ax2.axis("off")
         self.canvas2.draw_idle()
+
 
 def main():
     root = tk.Tk()
