@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog,messagebox
 import nibabel as nib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -34,7 +34,7 @@ class NiiViewerApp:
         self.z_slider.bind("<MouseWheel>", self.mouse_wheel)
 
         self.canvas = None
-
+        self.cid_press1 = None
 
         self.segment_button = tk.Button(self.frame, text="Segmentación", command=self.segmentation_options)
         self.segment_button.pack()
@@ -60,8 +60,6 @@ class NiiViewerApp:
             self.canvas.draw()
             self.canvas.get_tk_widget().pack()
 
-
-
     def mouse_wheel(self, event):
         if event.delta > 0:
             self.z_slider.set(self.z_slider.get() + 1)
@@ -82,6 +80,7 @@ class NiiViewerApp:
             self.isodata_segmentation()
         def destC ():
             dialog.destroy()
+            self.cid_press1 = self.canvas.mpl_connect('button_press_event', self.on_click_region_growing)
             self.region_growth_segmentation()
         def destK ():
             dialog.destroy()
@@ -99,6 +98,7 @@ class NiiViewerApp:
 
         kmeans_button = tk.Button(frame, text="K-Means", command=destK, width=15, height=2)
         kmeans_button.pack(side=tk.LEFT, padx=5,pady= 10)
+
 
 
     def threshold_segmentation(self):
@@ -160,13 +160,112 @@ class NiiViewerApp:
         
 
     def isodata_segmentation(self):
-        pass  # Implementa la segmentación de Isodata
+        # Calcular el histograma de la imagen
+        histogram, bins = np.histogram(self.img_data[:, :, self.z_slice].ravel(), bins=256, range=(0, 256))
+
+        # Inicializar los centroides utilizando K-Means
+        kmeans = KMeans(n_clusters=2, random_state=0).fit(histogram.reshape(-1, 1))
+        centroids = kmeans.cluster_centers_.ravel()
+
+        # Definir los límites iniciales de los grupos
+        low_threshold, high_threshold = centroids
+
+        # Iterar hasta que los centroides converjan
+        while True:
+            # Calcular el nuevo umbral como el promedio de los centroides
+            new_threshold = (low_threshold + high_threshold) / 2
+
+            # Asignar cada píxel al grupo correspondiente
+            group_1 = self.img_data[:, :, self.z_slice] <= new_threshold
+            group_2 = self.img_data[:, :, self.z_slice] > new_threshold
+
+            # Calcular los nuevos centroides
+            new_centroid_1 = np.mean(self.img_data[:, :, self.z_slice][group_1])
+            new_centroid_2 = np.mean(self.img_data[:, :, self.z_slice][group_2])
+
+            # Verificar si los centroides convergen
+            if abs(new_centroid_1 - centroids[0]) < 1e-5 and abs(new_centroid_2 - centroids[1]) < 1e-5:
+                break
+
+            # Actualizar los centroides y los umbrales
+            centroids = [new_centroid_1, new_centroid_2]
+            low_threshold, high_threshold = min(centroids), max(centroids)
+
+        # Segmentar la imagen utilizando los umbrales finales
+        segmented_img = np.zeros_like(self.img_data[:, :, self.z_slice])
+        segmented_img[self.img_data[:, :, self.z_slice] <= new_threshold] = 0
+        segmented_img[self.img_data[:, :, self.z_slice] > new_threshold] = 1
+
+        # Mostrar la imagen segmentada y su histograma
+        fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+        axes[0].imshow(segmented_img, cmap='gray')
+        axes[0].set_title("Segmentación de Isodata")
+        axes[0].axis('off')
+        axes[1].bar(bins[:-1], histogram, width=1)
+        axes[1].set_title("Histograma")
+        axes[1].set_xlabel("Intensidad de píxel")
+        axes[1].set_ylabel("Frecuencia")
+        plt.show()
 
     def region_growth_segmentation(self):
-        pass  # Implementa la segmentación de crecimiento de regiones
+        messagebox.showinfo("Segmentación", "Método de Segmentación: Crecimiento de Regiones")
+        messagebox.showinfo("Segmentación", "Seleccione una semilla haciendo clic en la imagen.")
 
-    def kmeans_segmentation(self):
-        pass  # Implementa la segmentación de kmeans
+        # Desconectar cualquier conexión de clic anterior
+        self.canvas.mpl_disconnect(self.cid_press1)
+        self.cid_press1 = self.canvas.mpl_connect('button_press_event', self.on_click_region_growing)
+
+    def on_click_region_growing(self, event):
+        x, y = int(event.xdata), int(event.ydata)
+        self.seed_point = (x, y)
+        self.region_growing_segmentation()
+
+    def region_growing_segmentation(self):
+        if not hasattr(self, 'seed_point'):
+            messagebox.showerror("Error", "Primero seleccione una semilla haciendo clic en la imagen.")
+            return
+
+        seed_x, seed_y = self.seed_point
+        seed_value = self.img_data[seed_y, seed_x, self.z_slice]  # Obtener el valor de intensidad de la semilla
+
+        # Inicializar la matriz de etiquetas para marcar los píxeles visitados
+        labels = np.zeros_like(self.img_data[:, :, self.z_slice])
+
+        # Inicializar una lista de píxeles por visitar
+        queue = [(seed_x, seed_y)]
+
+        # Definir la tolerancia de intensidad para el crecimiento de regiones
+        intensity_threshold = 100  # Puedes ajustar este valor según tus necesidades
+
+        # Mientras haya píxeles por visitar en la cola
+        while queue:
+            x, y = queue.pop(0)
+            # Marcar el píxel como visitado
+            labels[y, x] = 1
+
+            # Comprobar los píxeles adyacentes
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    # Verificar si el píxel está dentro de la imagen
+                    if 0 <= x + dx < self.img_data.shape[1] and 0 <= y + dy < self.img_data.shape[0]:
+                        # Verificar si el píxel no ha sido visitado y si cumple el criterio de similitud
+                        if labels[y + dy, x + dx] == 0 and abs(self.img_data[y + dy, x + dx, self.z_slice] - seed_value) < intensity_threshold:
+                            # Agregar el píxel a la cola para visitar en el próximo paso
+                            queue.append((x + dx, y + dy))
+                            # Marcar el píxel como parte de la región segmentada
+                            labels[y + dy, x + dx] = 1
+
+        # Visualizar la región segmentada
+        self.threshold_dialog = tk.Toplevel(self.master)  # Crear el diálogo de segmentación si no existe
+        self.threshold_dialog.title("Segmentación por Crecimiento de Regiones")
+
+        self.canvas2 = tk.Canvas(self.threshold_dialog)
+        self.fig2, self.ax2 = plt.subplots()
+        self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.threshold_dialog)
+        self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        self.ax2.imshow(labels, cmap="gray")  # Utilizar 'labels' para mostrar la segmentación
+        self.ax2.axis("off")
+        self.canvas2.draw_idle()
 
 def main():
     root = tk.Tk()
