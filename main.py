@@ -89,6 +89,10 @@ class NiiViewerApp:
         region_growing_button.pack(side=tk.LEFT, padx=5, pady=10)
         kmeans_button = tk.Button(frame, text="K-Means", command=destK, width=15, height=2)
         kmeans_button.pack(side=tk.LEFT, padx=5, pady=10)
+        # if segmented_img is not None:
+        #     file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
+        #     if file_path:
+        #         plt.imsave(file_path, segmented_img, cmap='gray')
 
     def threshold_segmentation(self):
         # min_pixel_value = np.min(self.img_data[:, :, self.z_slice])
@@ -137,10 +141,66 @@ class NiiViewerApp:
             file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
             if file_path:
                 plt.imsave(file_path, segmented_img, cmap='gray')
-
     
     def isodata_segmentation(self):
-        pass
+        # Obtener la imagen actual en la vista
+        current_slice = self.img_data[:, :, self.z_slice]
+
+        # Convertir la imagen en un vector unidimensional
+        flat_data = current_slice.flatten()
+
+        # Definir los límites inicial y final para el valor umbral
+        min_threshold = np.min(flat_data)
+        max_threshold = np.max(flat_data)
+
+        # Inicializar el valor umbral como el promedio de los límites inicial y final
+        threshold = (min_threshold + max_threshold) / 2
+
+        # Definir el número máximo de iteraciones
+        max_iterations = 50
+        iterations = 0
+
+        while True:
+            # Segmentar la imagen utilizando el valor umbral actual
+            segmented_img = np.zeros_like(current_slice)
+            segmented_img[current_slice >= threshold] = 255
+
+            # Calcular los promedios de intensidad para cada clase
+            class1_mean = np.mean(flat_data[segmented_img.flatten() == 0])
+            class2_mean = np.mean(flat_data[segmented_img.flatten() == 255])
+
+            # Calcular el nuevo valor umbral como el promedio de los promedios de intensidad
+            new_threshold = (class1_mean + class2_mean) / 2
+
+            # Si el valor umbral no cambia o se alcanza el número máximo de iteraciones, detener el bucle
+            if abs(threshold - new_threshold) < 0.5 or iterations >= max_iterations:
+                break
+
+            threshold = new_threshold
+            iterations += 1
+
+        # Mostrar la imagen segmentada en una nueva ventana
+        fig, ax = plt.subplots()
+        ax.imshow(segmented_img, cmap='gray')
+        ax.set_title("Segmentación ISODATA")
+        ax.axis('off')
+
+        # Crear una ventana de Tkinter y mostrar la figura en ella
+        window = tk.Toplevel(self.master)
+        window.title("Segmentación ISODATA")
+        canvas = FigureCanvasTkAgg(fig, master=window)
+        canvas.draw()
+        canvas.get_tk_widget().pack()
+
+        # Agregar un botón para guardar la imagen segmentada
+        save_button = tk.Button(window, text="Guardar como PNG", command=lambda: self.save_segmentation(segmented_img))
+        save_button.pack(pady=10)
+
+    def save_segmentation(self, segmented_img):
+        file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
+        if file_path:
+            plt.imsave(file_path, segmented_img, cmap='gray')
+            messagebox.showinfo("Guardado", "La segmentación se ha guardado exitosamente como PNG.")
 
     def region_growth_segmentation(self, num_seeds):
         # messagebox.showinfo("Segmentación", f"Seleccione {num_seeds} semillas haciendo clic en la imagen.")
@@ -205,7 +265,6 @@ class NiiViewerApp:
         file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
         if file_path:
             plt.imsave(file_path, data, cmap='gray')
-
 def main():
     root = tk.Tk()
     app = NiiViewerApp(root)
