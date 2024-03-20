@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 from skimage.filters import threshold_otsu
-from sklearn.cluster import KMeans
-import os
 
 class NiiViewerApp:
     def __init__(self, master):
@@ -37,7 +35,7 @@ class NiiViewerApp:
 
     def _update_slice(self):
         if self.img_data is not None:
-            self.z_slice = int(self.z_slider.get())
+            self.z_slice = self.z_slider.get()
             plt.clf()
             plt.imshow(self.img_data[:, :, self.z_slice], cmap='gray')
             plt.title("Corte en Z = {}".format(self.z_slice))
@@ -60,10 +58,8 @@ class NiiViewerApp:
     def segmentation_options(self):
         dialog = tk.Toplevel(self.master)
         dialog.title("Opciones de Segmentación")
-
         frame = tk.Frame(dialog)
         frame.pack()
-
         def destU():
             dialog.destroy()
             self.threshold_segmentation()
@@ -89,10 +85,6 @@ class NiiViewerApp:
         region_growing_button.pack(side=tk.LEFT, padx=5, pady=10)
         kmeans_button = tk.Button(frame, text="K-Means", command=destK, width=15, height=2)
         kmeans_button.pack(side=tk.LEFT, padx=5, pady=10)
-        # if segmented_img is not None:
-        #     file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
-        #     if file_path:
-        #         plt.imsave(file_path, segmented_img, cmap='gray')
 
     def threshold_segmentation(self):
         # min_pixel_value = np.min(self.img_data[:, :, self.z_slice])
@@ -265,6 +257,42 @@ class NiiViewerApp:
         file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
         if file_path:
             plt.imsave(file_path, data, cmap='gray')
+
+    def kmeans_segmentation(self, num_clusters=2, max_iterations=100):
+        # Obtener la imagen 2D en la posición z actual
+        img_slice = self.img_data[:, :, self.z_slice]
+        # Convertir la imagen 2D en un arreglo unidimensional
+        flattened_img = img_slice.flatten()
+        # Inicializar centroides aleatorios
+        centroids = np.random.choice(flattened_img, size=num_clusters)
+        for _ in range(max_iterations):
+            # Calcular la distancia euclidiana entre cada píxel y los centroides
+            distances = np.abs(flattened_img[:, None] - centroids)
+            # Asignar cada píxel al clúster con la distancia mínima
+            labels = np.argmin(distances, axis=1)
+            # Actualizar los centroides como el promedio de los píxeles en cada clúster
+            new_centroids = []
+            for i in range(num_clusters):
+                cluster_points = flattened_img[labels == i]
+                if len(cluster_points) > 0:
+                    new_centroids.append(np.mean(cluster_points))
+                else:
+                    # Si un clúster está vacío, mantener el centroide anterior
+                    new_centroids.append(centroids[i])
+            new_centroids = np.array(new_centroids)
+            # Si los centroides no cambian mucho, salir del bucle
+            if np.all(centroids == new_centroids):
+                break
+            centroids = new_centroids
+        # Reconstruir la imagen segmentada usando los centroides finales
+        segmented_img = centroids[labels].reshape(img_slice.shape)
+        # Visualizar la imagen segmentada
+        plt.figure()
+        plt.imshow(segmented_img, cmap='gray')
+        plt.title("Segmentación K-Means")
+        plt.axis('off')
+        plt.show()
+
 def main():
     root = tk.Tk()
     app = NiiViewerApp(root)
