@@ -126,13 +126,32 @@ class NiiViewerApp:
             if file_path:
                 plt.imsave(file_path, segmented_img, cmap='gray')
     
-    def isodata(self):
-        pass
+    def isodata(self, initial_threshold=0, tolerance=1):
+        threshold = initial_threshold
+        while True:
+            segmented_image = self.threshold_imagen(self.img_data, threshold)
+            foreground_mean = np.mean(self.img_data[segmented_image == 1])
+            background_mean = np.mean(self.img_data[segmented_image == 0])
+            new_threshold = (foreground_mean + background_mean) / 2
+            if abs(new_threshold - threshold) < tolerance:
+                break
+            threshold = new_threshold
 
-    def guardar_isodata(self, segmented_img):
-        file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
-        if file_path:
-            plt.imsave(file_path, segmented_img, cmap='gray')
+        segmented_image = self.threshold_imagen(self.img_data, threshold)
+        isodata_window = tk.Toplevel(self.master)
+        isodata_window.title("Segmentación Isodata")
+        fig, ax = plt.subplots()
+        ax.imshow(segmented_image[:, :, self.z_slider.get()], cmap='gray')
+        ax.set_title("Segmentación Isodata")
+        ax.axis('off')
+        canvas = FigureCanvasTkAgg(fig, master=isodata_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack()
+
+
+    def threshold_imagen(self, image, threshold):
+        return (image > threshold).astype(np.uint8)
+
 
     def crecimiento_regiones(self, num_seeds):
         messagebox.showinfo("Segmentación", f"Seleccione {num_seeds} semillas haciendo clic en la imagen.")
