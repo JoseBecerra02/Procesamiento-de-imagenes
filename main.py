@@ -106,6 +106,43 @@ class NiiViewerApp:
         kmeans_button = tk.Button(frame, text="K-Means", command=destK, width=15, height=2)
         kmeans_button.pack(side=tk.LEFT, padx=5, pady=10)
         
+    def umbral(self):
+        # min_pixel_value = np.min(self.img_data[:, :, self.z_slice])
+        max_pixel_value = np.max(self.img_data[:, :, self.z_slice])
+        threshold_value = 0
+        threshold_window = tk.Toplevel(self.master)
+        threshold_window.title("Segmentación por Umbralización")
+        frame = tk.Frame(threshold_window)
+        frame.pack()
+        threshold_label = tk.Label(frame, text="Segmentación con umbral {}".format(threshold_value), font=("Helvetica", 14))
+        threshold_label.pack(side=tk.TOP)
+        def update_umbral(value):
+            threshold_value = int(value)
+            segmented_img = self.img_data[:, :, self.z_slice] > threshold_value
+            im.set_data(segmented_img) 
+            threshold_label.config(text="Segmentación con umbral {}".format(threshold_value))
+            fig.canvas.draw()
+        fig, ax = plt.subplots()
+        ax.axis('off')
+        fig.tight_layout()
+        fig_canvas = FigureCanvasTkAgg(fig, master=frame)
+        fig_canvas.draw()
+        fig_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+        segmented_img = self.img_data[:, :, self.z_slice] > threshold_value
+        im = ax.imshow(segmented_img, cmap='gray')
+        self.threshold_slider = tk.Scale(frame, from_=0, to=max_pixel_value, orient=tk.HORIZONTAL, length=200, command=update_umbral)
+        self.threshold_slider.set(threshold_value)
+        self.threshold_slider.pack(side=tk.TOP)
+        update_umbral(threshold_value)
+        
+        save_button = tk.Button(frame, text="Guardar Segmentación", command=lambda: self.guardar_umbral(segmented_img))
+        save_button.pack(side=tk.BOTTOM, padx=5, pady=10)
+    def guardar_umbral(self, segmented_img):
+        if segmented_img is not None:
+            file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png")])
+            if file_path:
+                plt.imsave(file_path, segmented_img, cmap='gray')
+
     def isodata(self, initial_threshold=0, tolerance=1):
         threshold = initial_threshold
         while True:
@@ -242,7 +279,7 @@ class NiiViewerApp:
         self.segmented_canvas.draw()
         self.segmented_canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        self.segmented_z_slider = tk.Scale(window, from_=0, to=self.img_data.shape[2] - 1, orient=tk.HORIZONTAL, resolution=1, command=self.update_segmented_slicek)
+        self.segmented_z_slider = tk.Scale(window, from_=0, to=self.img_data.shape[2] - 1, orient=tk.HORIZONTAL, resolution=1, command=self.update_segmented_slick)
         self.segmented_z_slider.pack(fill="x")
         self.segmented_z_slider.set(self.z_slider.get())
 
