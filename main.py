@@ -28,8 +28,8 @@ class NiiViewerApp:
         self.segment_button = tk.Button(self.frame, text="Segmentación", command=self.options)
         self.segment_button.pack()
         self.segmented_img = None
-        self.segmented_z_slider = None
         self.segmented_canvas = None
+        self.segmented_z_slider = None
         self.trazos = []  # Lista para almacenar los trazos
         self.trazos_guardados = False  # Indica si se cargaron trazos desde un archivo
 
@@ -105,6 +105,7 @@ class NiiViewerApp:
         region_growing_button.pack(side=tk.LEFT, padx=5, pady=10)
         kmeans_button = tk.Button(frame, text="K-Means", command=destK, width=15, height=2)
         kmeans_button.pack(side=tk.LEFT, padx=5, pady=10)
+        
     def isodata(self, initial_threshold=0, tolerance=1):
         threshold = initial_threshold
         while True:
@@ -127,9 +128,6 @@ class NiiViewerApp:
         # Update the segmented slice after convergence
         self.update_segmented_slice()
 
-        save_button = tk.Button(self.isodata_window, text="Guardar como NIfTI", command=self.guardar_segmentacion_nifti)
-        save_button.pack(pady=10)
-
     def update_segmented_slice(self, event=None):
         if hasattr(self, 'canvas'):
             self.canvas.get_tk_widget().destroy()
@@ -146,7 +144,7 @@ class NiiViewerApp:
 
     def threshold_imagen(self, image, threshold):
         return (image > threshold).astype(np.uint8)
-
+    
     def crecimiento_regiones(self):
         if not self.trazos:
             messagebox.showerror("Error", "No hay trazos disponibles para el crecimiento de regiones.")
@@ -190,6 +188,24 @@ class NiiViewerApp:
         if file_path:
             plt.imsave(file_path, data, cmap='gray')
 
+    def guardar_trazos(self, file_path):
+        with open(file_path, 'w') as f:
+            for trazo in self.trazos:
+                f.write(f"{trazo[0][0]} {trazo[0][1]} {trazo[1][0]} {trazo[1][1]}\n")
+
+    def cargar_trazos(self, file_path):
+        with open(file_path, 'r') as f:
+            for line in f:
+                x1, y1, x2, y2 = map(float, line.split())
+                self.trazos.append(((x1, y1), (x2, y2)))
+        self.trazos_guardados = True
+
+    def dibujar_trazos(self):
+        if self.trazos_guardados:
+            for trazo in self.trazos:
+                plt.gca().plot([trazo[0][0], trazo[1][0]], [trazo[0][1], trazo[1][1]], color='red', linewidth=2)
+            self.canvas.draw()
+
     def kmeans(self, num_clusters=2, max_iterations=100):
         flattened_img = self.img_data.flatten()
         centroids = np.random.choice(flattened_img, size=num_clusters)
@@ -226,14 +242,14 @@ class NiiViewerApp:
         self.segmented_canvas.draw()
         self.segmented_canvas.get_tk_widget().pack(fill="both", expand=True)
 
-        self.segmented_z_slider = tk.Scale(window, from_=0, to=self.img_data.shape[2] - 1, orient=tk.HORIZONTAL, resolution=1, command=self.update_segmented_slice)
+        self.segmented_z_slider = tk.Scale(window, from_=0, to=self.img_data.shape[2] - 1, orient=tk.HORIZONTAL, resolution=1, command=self.update_segmented_slicek)
         self.segmented_z_slider.pack(fill="x")
         self.segmented_z_slider.set(self.z_slider.get())
 
         save_button = tk.Button(window, text="Guardar como NIfTI", command=self.guardar_segmentacion_nifti)
         save_button.pack(pady=10)
 
-    def update_segmented_slice(self, event=None):
+    def update_segmented_slick(self, event=None):
         if self.segmented_img is not None:
             self.z_slice = self.segmented_z_slider.get()
             plt.clf()
@@ -248,26 +264,6 @@ class NiiViewerApp:
         if file_path:
             segmented_img_nii = nib.Nifti1Image(self.segmented_img, self.img.affine)
             nib.save(segmented_img_nii, file_path)
-
-    def guardar_trazos(self, file_path):
-        with open(file_path, 'w') as f:
-            for trazo in self.trazos:
-                f.write(f"{trazo[0][0]} {trazo[0][1]} {trazo[1][0]} {trazo[1][1]}\n")
-
-    def cargar_trazos(self, file_path):
-        with open(file_path, 'r') as f:
-            for line in f:
-                x1, y1, x2, y2 = map(float, line.split())
-                self.trazos.append(((x1, y1), (x2, y2)))
-        self.trazos_guardados = True
-
-    def dibujar_trazos(self):
-        if self.trazos_guardados:
-            for trazo in self.trazos:
-                plt.gca().plot([trazo[0][0], trazo[1][0]], [trazo[0][1], trazo[1][1]], color='red', linewidth=2)
-            self.canvas.draw()
-
-    
 
 def main():
     root = tk.Tk()
