@@ -159,23 +159,16 @@ class NiiViewerApp:
         frame = tk.Frame(dialog)
         frame.pack()
 
-        # Escalar la imagen actual
         max_intensity = np.max(self.img_data)
         min_intensity = np.min(self.img_data)
         scaled_img_data = (self.img_data - min_intensity) / (max_intensity - min_intensity)
-        # print(scaled_img_data==self.img_data)
-        # print(max_intensity)
-        # print(min_intensity)
 
         fig_new_array = plt.figure()
         ax_new_array = fig_new_array.add_subplot(111)
-        ax_new_array.imshow(scaled_img_data[:, :, self.z_slice], cmap='gray')  # Ajusta el cmap según corresponda
+        ax_new_array.imshow(scaled_img_data[:, :, self.z_slice], cmap='gray')
         ax_new_array.set_title("Histograma")
         ax_new_array.axis('off')
-
-        # No necesitas llamar a tight_layout() en los ejes, llámalo en la figura
         fig_new_array.tight_layout()  
-
         canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=dialog)
         canvas_new_array.draw()
         canvas_new_array.get_tk_widget().pack()
