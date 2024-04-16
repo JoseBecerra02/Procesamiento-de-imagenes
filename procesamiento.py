@@ -114,26 +114,11 @@ class NiiViewerApp:
             m = (y[i]-y[i-1])/(x[i]-x[i-1])
             b = y[i-1]- m * x[i-1]
             fx = lambda x : m*x + b
-            # Aquí puedes hacer lo que necesites con la función fx
             trozos.append([m,b,fx])
-            # print(f"Para el trazo {i}, la función lineal es: y = {m} * x + {b} . {fx}")
-        # print(trozos)
 
-
-        # print("-"*100)
-        # print(x)
-        # print(y)
-        # print(trozos)
-
-        # print("")
         x1 = np.linspace(5,95,num_percentiles)
         y1= np.percentile(self.img_data.flatten(), x)
-        # print(x1)
-        # print(y1)
 
-        percentile_value = 100  # Por ejemplo, calcularemos el percentil 50 (la mediana)
-        percentile_image = np.percentile(self.img_data2, percentile_value)
-        # print(f"El valor del percentil {percentile_value} de la imagen es: {percentile_image}")
         new_array = np.zeros_like(self.img_data)
 
         for x in range(self.img_data.shape[0]):
@@ -157,17 +142,13 @@ class NiiViewerApp:
                             break
                     else:
                         percentile_img1 = None
-        # Mostrar new_array en un nuevo lienzo
-        # print(self.img_data==new_array)
+
         fig_new_array = plt.figure()
         ax_new_array = fig_new_array.add_subplot(111)
-        ax_new_array.imshow(new_array[:, :, self.z_slice], cmap='gray')  # Ajusta el cmap según corresponda
+        ax_new_array.imshow(new_array[:, :, self.z_slice], cmap='gray') 
         ax_new_array.set_title("Histograma")
         ax_new_array.axis('off')
-
-        # No necesitas llamar a tight_layout() en los ejes, llámalo en la figura
         fig_new_array.tight_layout()  
-
         canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=dialog)
         canvas_new_array.draw()
         canvas_new_array.get_tk_widget().pack()
@@ -205,44 +186,37 @@ class NiiViewerApp:
         frame = tk.Frame(dialog)
         frame.pack()
 
-        def peaks_f(hist, threshold=100):
+        def peaks_f(histogram, threshold=100):
             peaks = []
             for i in range(1, len(hist) - 1):
-                if hist[i] > hist[i - 1] and hist[i] > hist[i + 1] and hist[i] > threshold:
+                if histogram[i] > histogram[i - 1] and histogram[i] > histogram[i + 1] and histogram[i] > threshold:
                     peaks.append(i)
             print(peaks)
             return peaks
 
-        # Creat histogram
         hist, bin_edges = np.histogram(self.img_data.flatten(), bins=100)
-
-        # Find all the histogram peaks
         peaks = peaks_f(hist)
         peaks_values = bin_edges[peaks]
-        print(peaks_values)
 
-        # Rescaled image with the second peak (White matter)
         image_rescaled = self.img_data / peaks_values[-1]
 
         fig_new_array = plt.figure()
         ax_new_array = fig_new_array.add_subplot(111)
-        ax_new_array.imshow(image_rescaled[:, :, self.z_slice], cmap='gray')  # Ajusta el cmap según corresponda
+        ax_new_array.imshow(image_rescaled[:, :, self.z_slice], cmap='gray') 
         ax_new_array.set_title("Imagen después de white stipe")
         ax_new_array.axis('off')
-
-        # No necesitas llamar a tight_layout() en los ejes, llámalo en la figura
         fig_new_array.tight_layout()
-
         canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=frame)
         canvas_new_array.draw()
         canvas_new_array.get_tk_widget().pack()
 
-        
-        min =  0
-        filtered_reference_image = self.img_data.flatten()[self.img_data.flatten() > min]
-        filtered_image_rescaled = image_rescaled.flatten()[image_rescaled.flatten() > min]
+        show_hist_button = tk.Button(frame, text="Mostrar Histogramas", command=show_histograms)
+        show_hist_button.pack()
 
         def show_histograms():
+            min =  0
+            filtered_reference_image = self.img_data.flatten()[self.img_data.flatten() > min]
+            filtered_image_rescaled = image_rescaled.flatten()[image_rescaled.flatten() > min]
             dialog = tk.Toplevel(self.master)
             dialog.title("Histogramas")
             
@@ -255,7 +229,7 @@ class NiiViewerApp:
             ax_hist_original.set_ylabel("Frecuencia")
             
 
-            # Mostrar histograma después de eliminar la franja blanca
+            # Mostrar histograma después de white stipe
             ax_hist = fig_hist_original.add_subplot(122)
             ax_hist.hist(filtered_image_rescaled.flatten(), bins=100, color='blue', alpha=0.7)
             ax_hist.set_title("Histograma después white stipe")
@@ -266,10 +240,6 @@ class NiiViewerApp:
             canvas_hist_original = FigureCanvasTkAgg(fig_hist_original, master=dialog)
             canvas_hist_original.draw()
             canvas_hist_original.get_tk_widget().pack()
-
-        show_hist_button = tk.Button(frame, text="Mostrar Histogramas", command=show_histograms)
-        show_hist_button.pack()
-
 
     def zscore(self):
         dialog = tk.Toplevel(self.master)
