@@ -12,10 +12,10 @@ class NiiViewerApp:
         self.master.title("Segmentaciones")
         self.frame = tk.Frame(self.master)
         self.frame.pack()
-        self.file_path = "file.nii"  # Cambia el nombre del archivo según sea necesario
+        self.file_path = "file.nii" 
         self.img = nib.load(self.file_path)
         self.img_data = self.img.get_fdata() 
-        self.file_path2 = "file2.nii"  # Cambia el nombre del archivo según sea necesario
+        self.file_path2 = "file2.nii" 
         self.img2 = nib.load(self.file_path2)
         self.img_data2 = self.img2.get_fdata() 
         self.update_delay = 100 
@@ -32,8 +32,8 @@ class NiiViewerApp:
         self.segmented_img = None
         self.segmented_canvas = None
         self.segmented_z_slider = None
-        self.trazos = []  # Lista para almacenar los trazos
-        self.trazos_guardados = False  # Indica si se cargaron trazos desde un archivo
+        self.trazos = [] 
+        self.trazos_guardados = False
 
     def update_slice(self, event=None):
         if self.update_slice_id:
@@ -54,12 +54,25 @@ class NiiViewerApp:
             self.canvas = FigureCanvasTkAgg(plt.gcf(), master=self.frame)
             self.canvas.draw()
             self.canvas.get_tk_widget().pack()
-            # Bind event handlers for drawing
-            # self.canvas.mpl_connect('button_press_event', self.on_press)
-            # self.canvas.mpl_connect('motion_notify_event', self.on_motion)
-            # Dibujar trazos guardados si están disponibles
+            self.canvas.mpl_connect('button_press_event', self.on_press)
+            self.canvas.mpl_connect('motion_notify_event', self.on_motion)
             if self.trazos_guardados:
                 self.dibujar_trazos()
+
+    def on_press(self, event):
+        self.x_prev = event.xdata
+        self.y_prev = event.ydata
+    
+    def on_motion(self, event):
+        if event.button == 1:  # Solo dibujar si el clic izquierdo está presionado
+            if self.x_prev is None or self.y_prev is None:
+                return
+            x, y = int(event.xdata), int(event.ydata)
+            plt.gca().plot([self.x_prev, x], [self.y_prev, y], color='red', linewidth=2)
+            self.x_prev = x
+            self.y_prev = y
+            self.trazos.append(((self.x_prev, self.y_prev), (x, y)))  # Almacenar trazo
+            self.canvas.draw()
 
     def desplazamiento(self, event):
         if event.delta > 0:
@@ -69,10 +82,6 @@ class NiiViewerApp:
 
    
     def optionsProcess(self):
-        print(np.median([2, 3, 3, 5, 8, 10, 11]))
-        print(2+3+3+5+8+10+11)
-        print((2+3+3+5+8+10+11)/7)
-        print(np.mean([2, 3, 3, 5, 8, 10, 11]))
         dialog = tk.Toplevel(self.master)
         dialog.title("Opciones de Segmentación")
         frame = tk.Frame(dialog)
@@ -116,7 +125,6 @@ class NiiViewerApp:
 
                 self.mean(kernel)               
 
-            # Botón para aplicar el filtro de media con el tamaño seleccionado
             apply_button = tk.Button(frame, text="Aplicar", command=adada)
             apply_button.grid(row=1, column=0, columnspan=2, pady=10)
         def median():
@@ -126,13 +134,11 @@ class NiiViewerApp:
             frame.pack()
             kernel =  0
 
-            # Etiqueta y variable para seleccionar el tamaño del kernel
             kernel_size_label = tk.Label(frame, text="Tamaño del Kernel:")
             kernel_size_label.grid(row=0, column=0, padx=5, pady=5)
             self.kernel_size_var = tk.StringVar()
             self.kernel_size_var.set("3x3")  # Valor por defecto
 
-            # Opciones de tamaño del kernel
             kernel_size_options = ["3x3", "5x5", "10x10"]
             kernel_size_menu = tk.OptionMenu(frame, self.kernel_size_var, *kernel_size_options)
             kernel_size_menu.grid(row=0, column=1, padx=5, pady=5)
@@ -146,7 +152,6 @@ class NiiViewerApp:
 
                 self.median(kernel)               
 
-            # Botón para aplicar el filtro de media con el tamaño seleccionado
             apply_button = tk.Button(frame, text="Aplicar", command=adada)
             apply_button.grid(row=1, column=0, columnspan=2, pady=10)
             
@@ -318,14 +323,11 @@ class NiiViewerApp:
 
 
     def mean(self,kernel_size):
-        # Crea una nueva imagen para almacenar la imagen filtrada
         filtered_image = np.zeros_like(self.img_data)
 
-        # Aplica el filtro de media a la imagen
         for x in range(self.img_data.shape[0]):
             for y in range(self.img_data.shape[1]):
                 for z in range(self.img_data.shape[2]):
-                    # Calcula el valor promedio de los píxeles dentro del kernel
                     pixel_sum = 0
                     count = 0
                     for i in range(-kernel_size // 2, kernel_size // 2 + 1):
@@ -337,13 +339,11 @@ class NiiViewerApp:
                                 count += 1
                     filtered_image[x, y, z] = pixel_sum / count
 
-        # Crea una nueva ventana para mostrar la imagen filtrada
         dialog = tk.Toplevel(self.master)
         dialog.title("Filtro de Media")
         frame = tk.Frame(dialog)
         frame.pack()
 
-        # Visualiza la imagen filtrada
         fig_new_array = plt.figure()
         ax_new_array = fig_new_array.add_subplot(111)
         ax_new_array.imshow(filtered_image[:, :, self.z_slice], cmap='gray')
@@ -355,14 +355,11 @@ class NiiViewerApp:
         canvas_new_array.get_tk_widget().pack()
 
     def median(self, kernel_size):
-        # Crea una nueva imagen para almacenar la imagen filtrada
         filtered_image = np.zeros_like(self.img_data)
 
-        # Aplica el filtro de mediana a la imagen
         for x in range(self.img_data.shape[0]):
             for y in range(self.img_data.shape[1]):
                 for z in range(self.img_data.shape[2]):
-                    # Recopila los valores de intensidad de los píxeles dentro del kernel
                     values = []
                     for i in range(-kernel_size // 2, kernel_size // 2 + 1):
                         for j in range(-kernel_size // 2, kernel_size // 2 + 1):
@@ -371,16 +368,13 @@ class NiiViewerApp:
                                 z >= 0 and z < self.img_data.shape[2]):
                                 values.append(self.img_data[x + i, y + j, z])
                     
-                    # Calcula el valor mediano de los píxeles dentro del kernel
                     filtered_image[x, y, z] = np.median(values)
 
-        # Crea una nueva ventana para mostrar la imagen filtrada
         dialog = tk.Toplevel(self.master)
         dialog.title("Filtro de Mediana")
         frame = tk.Frame(dialog)
         frame.pack()
 
-        # Visualiza la imagen filtrada
         fig_new_array = plt.figure()
         ax_new_array = fig_new_array.add_subplot(111)
         ax_new_array.imshow(filtered_image[:, :, self.z_slice], cmap='gray')
