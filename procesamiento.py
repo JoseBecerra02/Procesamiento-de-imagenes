@@ -204,46 +204,73 @@ class NiiViewerApp:
         dialog.title("stra")
         frame = tk.Frame(dialog)
         frame.pack()
-        # Get reference image to standardise original image
-        # path = os.path.abspath("./images/1/FLAIR.nii.gz")
-        # reference_image = nib.load(path).get_fdata()
 
-        def find_peaks_manual(hist, threshold=100):
+        def peaks_f(hist, threshold=100):
             peaks = []
             for i in range(1, len(hist) - 1):
                 if hist[i] > hist[i - 1] and hist[i] > hist[i + 1] and hist[i] > threshold:
                     peaks.append(i)
+            print(peaks)
             return peaks
 
-        reference_image = self.img_data
-        
-
-        # Create histogram
-        hist, bin_edges = np.histogram(reference_image.flatten(), bins=100)
+        # Creat histogram
+        hist, bin_edges = np.histogram(self.img_data.flatten(), bins=100)
 
         # Find all the histogram peaks
-        peaks = find_peaks_manual(hist)
+        peaks = peaks_f(hist)
         peaks_values = bin_edges[peaks]
+        print(peaks_values)
 
         # Rescaled image with the second peak (White matter)
-        image_rescaled = self.img_data / peaks_values[1]
-
-        print(self.img_data[88,:,:])
-        print("-"*50)
-        print(image_rescaled[88,:,:])
+        image_rescaled = self.img_data / peaks_values[-1]
 
         fig_new_array = plt.figure()
         ax_new_array = fig_new_array.add_subplot(111)
         ax_new_array.imshow(image_rescaled[:, :, self.z_slice], cmap='gray')  # Ajusta el cmap según corresponda
-        ax_new_array.set_title("Histograma")
+        ax_new_array.set_title("Imagen después de white stipe")
         ax_new_array.axis('off')
 
         # No necesitas llamar a tight_layout() en los ejes, llámalo en la figura
-        fig_new_array.tight_layout()  
+        fig_new_array.tight_layout()
 
-        canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=dialog)
+        canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=frame)
         canvas_new_array.draw()
         canvas_new_array.get_tk_widget().pack()
+
+        
+        min =  0
+        filtered_reference_image = self.img_data.flatten()[self.img_data.flatten() > min]
+        filtered_image_rescaled = image_rescaled.flatten()[image_rescaled.flatten() > min]
+
+        def show_histograms():
+            dialog = tk.Toplevel(self.master)
+            dialog.title("Histogramas")
+            
+            # Mostrar histograma original
+            fig_hist_original = plt.figure(figsize=(14, 6))
+            ax_hist_original = fig_hist_original.add_subplot(121)
+            ax_hist_original.hist(filtered_reference_image.flatten(), bins=100, color='red', alpha=0.7)
+            ax_hist_original.set_title("Histograma original")
+            ax_hist_original.set_xlabel("Intensidad")
+            ax_hist_original.set_ylabel("Frecuencia")
+            
+
+            # Mostrar histograma después de eliminar la franja blanca
+            ax_hist = fig_hist_original.add_subplot(122)
+            ax_hist.hist(filtered_image_rescaled.flatten(), bins=100, color='blue', alpha=0.7)
+            ax_hist.set_title("Histograma después white stipe")
+            ax_hist.set_xlabel("Intensidad")
+            ax_hist.set_ylabel("Frecuencia")
+            
+
+            canvas_hist_original = FigureCanvasTkAgg(fig_hist_original, master=dialog)
+            canvas_hist_original.draw()
+            canvas_hist_original.get_tk_widget().pack()
+
+        show_hist_button = tk.Button(frame, text="Mostrar Histogramas", command=show_histograms)
+        show_hist_button.pack()
+
+
     def zscore(self):
         dialog = tk.Toplevel(self.master)
         dialog.title("Intensidad del Escalador")
