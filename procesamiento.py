@@ -88,8 +88,38 @@ class NiiViewerApp:
             dialog.destroy()
             self.zscore()
         def mean():
-            dialog.destroy()
-            self.mean()
+            
+
+            dialog = tk.Toplevel(self.master)
+            dialog.title("Filtro de Media")
+            frame = tk.Frame(dialog)
+            frame.pack()
+            kernel =  0
+
+            # Etiqueta y variable para seleccionar el tamaño del kernel
+            kernel_size_label = tk.Label(frame, text="Tamaño del Kernel:")
+            kernel_size_label.grid(row=0, column=0, padx=5, pady=5)
+            self.kernel_size_var = tk.StringVar()
+            self.kernel_size_var.set("3x3")  # Valor por defecto
+
+            # Opciones de tamaño del kernel
+            kernel_size_options = ["3x3", "5x5", "10x10"]
+            kernel_size_menu = tk.OptionMenu(frame, self.kernel_size_var, *kernel_size_options)
+            kernel_size_menu.grid(row=0, column=1, padx=5, pady=5)
+            def adada():
+                if(self.kernel_size_var.get()=="3x3"):
+                    kernel=3
+                elif(self.kernel_size_var.get()=="5x5"):
+                    kernel=5
+                else:
+                    kernel=10
+
+                self.mean(kernel)               
+
+            # Botón para aplicar el filtro de media con el tamaño seleccionado
+            apply_button = tk.Button(frame, text="Aplicar", command=adada)
+            apply_button.grid(row=1, column=0, columnspan=2, pady=10)
+            # dialog.destroy()
         def median():
             dialog.destroy()
             self.median()
@@ -101,6 +131,8 @@ class NiiViewerApp:
         intensity_button.pack(side=tk.LEFT, padx=5, pady=10)
         zindex_button = tk.Button(frame, text="Zscore", command=zindex, width=15, height=2)
         zindex_button.pack(side=tk.LEFT, padx=5, pady=10)
+        mean_button = tk.Button(frame, text="Mean", command=mean, width=15, height=2)
+        mean_button.pack(side=tk.LEFT, padx=5, pady=10)
     
     def histogram(self):
         num_percentiles = 10
@@ -254,6 +286,45 @@ class NiiViewerApp:
         canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=dialog)
         canvas_new_array.draw()
         canvas_new_array.get_tk_widget().pack()
+
+
+    def mean(self,kernel_size):
+        # Crea una nueva imagen para almacenar la imagen filtrada
+        filtered_image = np.zeros_like(self.img_data)
+
+        # Aplica el filtro de media a la imagen
+        for x in range(self.img_data.shape[0]):
+            for y in range(self.img_data.shape[1]):
+                for z in range(self.img_data.shape[2]):
+                    # Calcula el valor promedio de los píxeles dentro del kernel
+                    pixel_sum = 0
+                    count = 0
+                    for i in range(-kernel_size // 2, kernel_size // 2 + 1):
+                        for j in range(-kernel_size // 2, kernel_size // 2 + 1):
+                            if (x + i >= 0 and x + i < self.img_data.shape[0] and
+                                y + j >= 0 and y + j < self.img_data.shape[1] and
+                                z >= 0 and z < self.img_data.shape[2]):
+                                pixel_sum += self.img_data[x + i, y + j, z]
+                                count += 1
+                    filtered_image[x, y, z] = pixel_sum / count
+
+        # Crea una nueva ventana para mostrar la imagen filtrada
+        dialog = tk.Toplevel(self.master)
+        dialog.title("Filtro de Media")
+        frame = tk.Frame(dialog)
+        frame.pack()
+
+        # Visualiza la imagen filtrada
+        fig_new_array = plt.figure()
+        ax_new_array = fig_new_array.add_subplot(111)
+        ax_new_array.imshow(filtered_image[:, :, self.z_slice], cmap='gray')
+        ax_new_array.set_title("Imagen después del Filtro de Media")
+        ax_new_array.axis('off')
+        fig_new_array.tight_layout()
+        canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=dialog)
+        canvas_new_array.draw()
+        canvas_new_array.get_tk_widget().pack()
+    
         
 
 def main():
