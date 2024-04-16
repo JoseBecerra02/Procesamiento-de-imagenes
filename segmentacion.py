@@ -188,7 +188,7 @@ class NiiViewerApp:
             return
 
         labels = np.zeros_like(self.img_data[:, :, self.z_slice])
-        intensity_threshold = 100
+        intensity_threshold = 70
 
         for trazo in self.trazos:
             seed_x, seed_y = trazo[0]

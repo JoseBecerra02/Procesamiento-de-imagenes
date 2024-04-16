@@ -78,9 +78,6 @@ class NiiViewerApp:
         def histogram():
             dialog.destroy()
             self.histogram()
-        def matching():
-            dialog.destroy()
-            self.matching()
         def white():
             dialog.destroy()
             self.white()
@@ -89,7 +86,7 @@ class NiiViewerApp:
             self.intensity()
         def zindex():
             dialog.destroy()
-            self.zindex()
+            self.zscore()
         def mean():
             dialog.destroy()
             self.mean()
@@ -98,11 +95,11 @@ class NiiViewerApp:
             self.median()
         histogram_button = tk.Button(frame, text="Histograma", command=histogram, width=15, height=2)
         histogram_button.pack(side=tk.LEFT, padx=5, pady=10)
-        whitestraping_button = tk.Button(frame, text="White Straping", command=white, width=20, height=2)
+        whitestraping_button = tk.Button(frame, text="White stripe", command=white, width=20, height=2)
         whitestraping_button.pack(side=tk.LEFT, padx=5, pady=10)
         intensity_button = tk.Button(frame, text="Intesity rescaller", command=intensity, width=15, height=2)
         intensity_button.pack(side=tk.LEFT, padx=5, pady=10)
-        zindex_button = tk.Button(frame, text="Zindex", command=zindex, width=15, height=2)
+        zindex_button = tk.Button(frame, text="Zscore", command=zindex, width=15, height=2)
         zindex_button.pack(side=tk.LEFT, padx=5, pady=10)
     
     def histogram(self):
@@ -113,26 +110,26 @@ class NiiViewerApp:
         y = np.percentile(self.img_data2.flatten(), x)
         
         trozos = []
-        for i in range(len(y)):
+        for i in range(1 , len(y)):
             m = (y[i]-y[i-1])/(x[i]-x[i-1])
             b = y[i-1]- m * x[i-1]
             fx = lambda x : m*x + b
             # Aquí puedes hacer lo que necesites con la función fx
-            trozos.append([m,b])
+            trozos.append([m,b,fx])
             # print(f"Para el trazo {i}, la función lineal es: y = {m} * x + {b} . {fx}")
-        print(trozos)
+        # print(trozos)
 
 
-        print("-"*100)
+        # print("-"*100)
         # print(x)
         # print(y)
         # print(trozos)
 
-        print("")
+        # print("")
         x1 = np.linspace(5,95,num_percentiles)
         y1= np.percentile(self.img_data.flatten(), x)
-        print(x1)
-        print(y1)
+        # print(x1)
+        # print(y1)
 
         percentile_value = 100  # Por ejemplo, calcularemos el percentil 50 (la mediana)
         percentile_image = np.percentile(self.img_data2, percentile_value)
@@ -161,7 +158,7 @@ class NiiViewerApp:
                     else:
                         percentile_img1 = None
         # Mostrar new_array en un nuevo lienzo
-        print(self.img_data==new_array)
+        # print(self.img_data==new_array)
         fig_new_array = plt.figure()
         ax_new_array = fig_new_array.add_subplot(111)
         ax_new_array.imshow(new_array[:, :, self.z_slice], cmap='gray')  # Ajusta el cmap según corresponda
@@ -175,18 +172,108 @@ class NiiViewerApp:
         canvas_new_array.draw()
         canvas_new_array.get_tk_widget().pack()
 
-        # Frame para el slider
-        slider_frame = tk.Frame(dialog)
-        slider_frame.pack()
-        # Slider para controlar algo relacionado con el histograma
-        hist_slider = tk.Scale(slider_frame, from_=0, to=100, orient=tk.HORIZONTAL)
-        hist_slider.pack()
+    def intensity(self):
+        dialog = tk.Toplevel(self.master)
+        dialog.title("Intensidad del Escalador")
+        frame = tk.Frame(dialog)
+        frame.pack()
 
-        def update_hist(event=None):
-            # Función para actualizar el histograma según el valor del slider
-            pass  # Aquí debes agregar la lógica para actualizar el histograma
+        # Escalar la imagen actual
+        max_intensity = np.max(self.img_data)
+        min_intensity = np.min(self.img_data)
+        scaled_img_data = (self.img_data - min_intensity) / (max_intensity - min_intensity)
+        # print(scaled_img_data==self.img_data)
+        # print(max_intensity)
+        # print(min_intensity)
 
-        hist_slider.config(command=update_hist)  # Asigna la función de actualización al slider
+        fig_new_array = plt.figure()
+        ax_new_array = fig_new_array.add_subplot(111)
+        ax_new_array.imshow(scaled_img_data[:, :, self.z_slice], cmap='gray')  # Ajusta el cmap según corresponda
+        ax_new_array.set_title("Histograma")
+        ax_new_array.axis('off')
+
+        # No necesitas llamar a tight_layout() en los ejes, llámalo en la figura
+        fig_new_array.tight_layout()  
+
+        canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=dialog)
+        canvas_new_array.draw()
+        canvas_new_array.get_tk_widget().pack()
+
+    def white(self):
+        dialog = tk.Toplevel(self.master)
+        dialog.title("stra")
+        frame = tk.Frame(dialog)
+        frame.pack()
+        # Get reference image to standardise original image
+        # path = os.path.abspath("./images/1/FLAIR.nii.gz")
+        # reference_image = nib.load(path).get_fdata()
+
+        def find_peaks_manual(hist, threshold=100):
+            peaks = []
+            for i in range(1, len(hist) - 1):
+                if hist[i] > hist[i - 1] and hist[i] > hist[i + 1] and hist[i] > threshold:
+                    peaks.append(i)
+            return peaks
+
+        reference_image = self.img_data
+        
+
+        # Create histogram
+        hist, bin_edges = np.histogram(reference_image.flatten(), bins=100)
+
+        # Find all the histogram peaks
+        peaks = find_peaks_manual(hist)
+        peaks_values = bin_edges[peaks]
+
+        # Rescaled image with the second peak (White matter)
+        image_rescaled = self.img_data / peaks_values[1]
+
+        print(self.img_data[88,:,:])
+        print("-"*50)
+        print(image_rescaled[88,:,:])
+
+        fig_new_array = plt.figure()
+        ax_new_array = fig_new_array.add_subplot(111)
+        ax_new_array.imshow(image_rescaled[:, :, self.z_slice], cmap='gray')  # Ajusta el cmap según corresponda
+        ax_new_array.set_title("Histograma")
+        ax_new_array.axis('off')
+
+        # No necesitas llamar a tight_layout() en los ejes, llámalo en la figura
+        fig_new_array.tight_layout()  
+
+        canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=dialog)
+        canvas_new_array.draw()
+        canvas_new_array.get_tk_widget().pack()
+    def zscore(self):
+        dialog = tk.Toplevel(self.master)
+        dialog.title("Intensidad del Escalador")
+        frame = tk.Frame(dialog)
+        frame.pack()
+        img = self.img_data
+
+        mean_value = img[img > 10].mean()
+        standard_deviation_value = img[img > 10].std()
+
+        if np.std(img) == 0:
+            image_rescaled = img
+        else:
+            # image_standardized = (image - np.mean(image)) / np.std(image)
+            image_rescaled = (img - mean_value) / (standard_deviation_value)
+        print(self.img_data[80,:,:])
+        print("-"*100)
+        print(image_rescaled[80,:,:])
+        fig_new_array = plt.figure()
+        ax_new_array = fig_new_array.add_subplot(111)
+        ax_new_array.imshow(image_rescaled[:, :, self.z_slice], cmap='gray')  # Ajusta el cmap según corresponda
+        ax_new_array.set_title("Histograma")
+        ax_new_array.axis('off')
+
+        # No necesitas llamar a tight_layout() en los ejes, llámalo en la figura
+        fig_new_array.tight_layout()  
+
+        canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=dialog)
+        canvas_new_array.draw()
+        canvas_new_array.get_tk_widget().pack()
         
 
 def main():
