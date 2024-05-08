@@ -1,6 +1,7 @@
 import tkinter as tk
 import segmentacion as segment
 import procesamiento as process
+import bordesregisto as boreg
 
 def segmentacion():
     # Aquí puedes colocar el código para la funcionalidad de segmentación
@@ -10,6 +11,11 @@ def segmentacion():
 def procesamiento():
     # Aquí puedes colocar el código para la funcionalidad de procesamiento
     process.main()
+    print("Procesamiento")
+    
+def bodesregist():
+    # Aquí puedes colocar el código para la funcionalidad de procesamiento
+    boreg.main()
     print("Procesamiento")
 
 # Crear la ventana principal
@@ -27,6 +33,9 @@ btn_segmentacion = tk.Button(contenedor_botones, text="Segmentación", command=s
 btn_segmentacion.pack(side=tk.LEFT, padx=5)
 
 btn_procesamiento = tk.Button(contenedor_botones, text="Procesamiento", command=procesamiento,width=30, height=20, bg=color_boton, fg=color_texto)
+btn_procesamiento.pack(side=tk.LEFT, padx=5)
+
+btn_procesamiento = tk.Button(contenedor_botones, text="Bordes/Registro", command=bodesregist,width=30, height=20, bg=color_boton, fg=color_texto)
 btn_procesamiento.pack(side=tk.LEFT, padx=5)
 
 # Ejecutar el bucle de eventos

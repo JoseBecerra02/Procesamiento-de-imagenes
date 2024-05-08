@@ -4,7 +4,8 @@ import nibabel as nib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
-from scipy import stats
+import scipy.ndimage
+from scipy.signal import convolve2d
 
 class NiiViewerApp:
     def __init__(self, master):
@@ -154,6 +155,9 @@ class NiiViewerApp:
 
             apply_button = tk.Button(frame, text="Aplicar", command=adada)
             apply_button.grid(row=1, column=0, columnspan=2, pady=10)
+        def finite():
+            dialog.destroy()
+            self.finite_difference()
             
         histogram_button = tk.Button(frame, text="Histograma", command=histogram, width=15, height=2)
         histogram_button.pack(side=tk.LEFT, padx=5, pady=10)
@@ -384,6 +388,7 @@ class NiiViewerApp:
         canvas_new_array = FigureCanvasTkAgg(fig_new_array, master=dialog)
         canvas_new_array.draw()
         canvas_new_array.get_tk_widget().pack()
+    
     
         
 
