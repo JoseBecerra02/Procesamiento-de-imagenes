@@ -8,6 +8,8 @@ from tkinter import filedialog, Tk
 def main():
     # Deshabilitar la barra de herramientas
     plt.rcParams['toolbar'] = 'None'
+    global seeds
+    seeds = []
     # Función para manejar eventos del mouse
     def draw_circle(event):
         global seeds, prev_pos
@@ -39,9 +41,9 @@ def main():
     # Crear una ventana y asociar la función de manejo de eventos del mouse
     fig, ax = plt.subplots()
     ax.imshow(imgv)
-    ax.set_title('Cierra esta ventana luego de marcar las semillas')
+    ax.set_title('Cierra esta ventana luego de marcar las semillas.\nClick izquierdo foreground, click derecho  background')
     ax.axis('off')  # Para quitar los ejes
-    seeds = []
+    
     prev_pos = None
     plt.connect('button_press_event', draw_circle)
     plt.connect('motion_notify_event', draw_circle)
@@ -51,8 +53,8 @@ def main():
 
     hH, wW = img.shape
     numeracion = np.arange(hH * wW).reshape(hH,wW)
-    print("Dimensiones de la imagen:", hH, "x", wW)
-    print("Coordenadas de las semillas:", seeds)
+    # print("Dimensiones de la imagen:", hH, "x", wW)
+    # print("Coordenadas de las semillas:", seeds)
 
     # Función para calcular la mediana de las diferencias de características
     def compute_sigma(img):
@@ -74,7 +76,7 @@ def main():
 
     # Uso de la función compute_sigma
     sigmaF = compute_sigma(img)
-    print("Sigma calculado:", sigmaF)
+    # print("Sigma calculado:", sigmaF)
 
     # Función para calcular la afinidad entre dos píxeles
     def compute_affinity(pixel1, pixel2, sigma, epsilon):
